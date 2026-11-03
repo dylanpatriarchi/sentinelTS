@@ -24,7 +24,7 @@ Reproduce:
 
 ```bash
 for s in FD001 FD002; do for w in 0 10; do for seed in 42 0 1; do
-  uv run python scripts/run_baseline.py --subset $s --rolling-window $w --seed $seed
+  uv run python scripts/run_experiment.py --model iforest --subset $s --rolling-window $w --seed $seed
 done; done; done
 ```
 
