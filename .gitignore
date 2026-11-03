@@ -10,9 +10,9 @@ __pycache__/
 htmlcov/
 
 # Data & artifacts (never commit datasets or model weights)
-data/
-artifacts/
-mlruns/
+/data/
+/artifacts/
+/mlruns/
 *.pt
 *.ckpt
 
