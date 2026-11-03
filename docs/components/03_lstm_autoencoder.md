@@ -35,7 +35,7 @@ comparisons can be made per seed (paired).
 Reproduce one run:
 
 ```bash
-uv run python scripts/run_experiment.py --model lstm_ae --subset FD001 --rolling-window 0 --window 50 --seed 0
+uv run sentinelts run --model lstm_ae --subset FD001 --rolling-window 0 --window 50 --seed 0
 ```
 
 Mean ± std over the 3 splits (measured 2026-11-03):

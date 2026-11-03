@@ -11,6 +11,9 @@ dependencies = [
     "torch>=2.5",
 ]
 
+[project.scripts]
+sentinelts = "sentinelts.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

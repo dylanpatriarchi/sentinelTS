@@ -32,7 +32,7 @@ Validation engines only; the official test set has **not** been used.
 Same 3 engine splits (seeds 0, 1, 42) for every model.
 
 ```bash
-uv run python scripts/run_experiment.py --model transformer --subset FD001 --rolling-window 0 --window 50 --score-smoothing 10 --seed 0
+uv run sentinelts run --model transformer --subset FD001 --rolling-window 0 --window 50 --score-smoothing 10 --seed 0
 ```
 
 Mean ± std over the 3 splits (measured 2026-11-03), k = score smoothing:
