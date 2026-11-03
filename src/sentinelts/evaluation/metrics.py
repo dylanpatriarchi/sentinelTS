@@ -33,6 +33,7 @@ class PointMetrics:
     recall: float
     f1: float
     anomaly_ratio: float  # = PR-AUC of a random detector, the baseline to beat
+    early_warning_auc: float  # ROC-AUC ambiguous vs healthy (NaN if either is absent)
     n_points: int
 
     def as_dict(self) -> dict[str, float]:
@@ -62,6 +63,13 @@ def _validate(df: pd.DataFrame, score_col: str) -> None:
 
 def point_metrics(df: pd.DataFrame, threshold: float, score_col: str = "score") -> PointMetrics:
     _validate(df, score_col)
+    early = df[df["label"] != ANOMALOUS]
+    y_early = (early["label"] == AMBIGUOUS).to_numpy()
+    early_auc = (
+        float(roc_auc_score(y_early, early[score_col].to_numpy(dtype=float)))
+        if 0 < y_early.sum() < y_early.size
+        else float("nan")
+    )
     eval_df = df[df["label"] != AMBIGUOUS]
     y = (eval_df["label"] == ANOMALOUS).to_numpy()
     s = eval_df[score_col].to_numpy(dtype=float)
@@ -82,6 +90,7 @@ def point_metrics(df: pd.DataFrame, threshold: float, score_col: str = "score") 
         recall=recall,
         f1=f1,
         anomaly_ratio=float(y.mean()),
+        early_warning_auc=early_auc,
         n_points=int(y.size),
     )
 
