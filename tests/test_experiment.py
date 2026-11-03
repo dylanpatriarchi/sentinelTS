@@ -97,3 +97,12 @@ def test_pipeline_runs_with_windowed_lstm_autoencoder(synthetic_root):
     assert res.validation.scored["cycle"].min() == 11  # same evaluated rows as point models
     assert "training_history" in res.extra
     assert np.isfinite(res.validation.scored["score"]).all()
+
+
+def test_score_smoothing_is_causal_and_per_engine():
+    from sentinelts.experiment import smooth_scores
+
+    units = np.array([1, 1, 1, 2, 2])
+    out = smooth_scores(np.array([1.0, 3.0, 5.0, 10.0, 20.0]), units, k=2)
+    assert out.tolist() == [1.0, 2.0, 4.0, 10.0, 15.0]
+    assert smooth_scores(np.array([1.0, 2.0]), np.array([1, 1]), k=1).tolist() == [1.0, 2.0]

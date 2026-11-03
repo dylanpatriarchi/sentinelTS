@@ -14,7 +14,12 @@ import json
 from pathlib import Path
 
 from sentinelts.experiment import ExperimentConfig, run_experiment
-from sentinelts.models import IsolationForestDetector, LSTMAutoencoderDetector, TrainingConfig
+from sentinelts.models import (
+    IsolationForestDetector,
+    LSTMAutoencoderDetector,
+    TrainingConfig,
+    TransformerDetector,
+)
 
 
 def build_factory(args: argparse.Namespace):
@@ -32,34 +37,59 @@ def build_factory(args: argparse.Namespace):
             training=train_cfg,
             seed=args.seed,
         )
+    if args.model == "transformer":
+        train_cfg = TrainingConfig(
+            epochs=args.epochs, lr=args.lr, patience=args.patience, device=args.device
+        )
+        return lambda: TransformerDetector(
+            window=args.window,
+            d_model=args.d_model,
+            nhead=args.nhead,
+            num_layers=args.num_layers,
+            dropout=args.dropout,
+            training=train_cfg,
+            seed=args.seed,
+        )
     raise ValueError(f"Unknown model {args.model}")
 
 
 def run_name(args: argparse.Namespace) -> str:
     name = f"{args.subset}_w{args.rolling_window}_s{args.seed}"
+    if args.score_smoothing > 1:
+        name += f"_k{args.score_smoothing}"
     if args.model == "lstm_ae":
         name += f"_W{args.window}_h{args.hidden_size}_z{args.latent_size}_{args.score_on}"
+    if args.model == "transformer":
+        name += f"_W{args.window}_d{args.d_model}_L{args.num_layers}"
     return name
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--model", choices=["iforest", "lstm_ae"], default="iforest")
+    p.add_argument("--model", choices=["iforest", "lstm_ae", "transformer"], default="iforest")
     p.add_argument("--root", type=Path, default=Path("data/raw"))
     p.add_argument("--subset", default="FD001")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--healthy-cycles", type=int, default=50)
     p.add_argument("--rolling-window", type=int, default=10)
     p.add_argument("--threshold-q", type=float, default=0.99)
+    p.add_argument("--score-smoothing", type=int, default=1)
     p.add_argument("--evaluate-test", action="store_true")
     p.add_argument("--out", type=Path, default=Path("artifacts"))
     # Isolation Forest
     p.add_argument("--n-estimators", type=int, default=200)
-    # LSTM-AE
+    # Windowed models (LSTM-AE, Transformer)
     p.add_argument("--window", type=int, default=30)
+    # LSTM-AE
     p.add_argument("--hidden-size", type=int, default=64)
     p.add_argument("--latent-size", type=int, default=8)
     p.add_argument("--score-on", choices=["window", "last"], default="window")
+    # Transformer
+    p.add_argument("--d-model", type=int, default=32)
+    p.add_argument("--nhead", type=int, default=4)
+    p.add_argument("--num-layers", type=int, default=2)
+    p.add_argument("--dropout", type=float, default=0.1)
+    # Neural training (LSTM-AE and Transformer)
     p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--patience", type=int, default=10)
@@ -72,6 +102,7 @@ def main() -> None:
         healthy_cycles=args.healthy_cycles,
         rolling_window=args.rolling_window,
         threshold_q=args.threshold_q,
+        score_smoothing=args.score_smoothing,
     )
     result = run_experiment(args.root, build_factory(args), cfg, evaluate_test=args.evaluate_test)
 

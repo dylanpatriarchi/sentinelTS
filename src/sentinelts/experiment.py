@@ -44,8 +44,14 @@ class ExperimentConfig:
     # caused spurious alarms at cycle 1). Fixed across configs so that every
     # experiment is evaluated on exactly the same rows.
     warmup_cycles: int = 10
+    # Causal moving average of the last k anomaly scores of the same engine,
+    # applied before thresholding. 1 = raw scores. Model-agnostic, so it can be
+    # compared fairly across detectors.
+    score_smoothing: int = 1
 
     def __post_init__(self) -> None:
+        if self.score_smoothing < 1:
+            raise ValueError("score_smoothing must be >= 1")
         if self.rolling_window > self.warmup_cycles + 1:
             raise ValueError("rolling_window must be <= warmup_cycles + 1")
         if self.healthy_cycles <= self.warmup_cycles:
@@ -102,6 +108,18 @@ class FeaturePipeline:
         return out
 
 
+def smooth_scores(scores: np.ndarray, units: np.ndarray, k: int) -> np.ndarray:
+    """Causal per-engine moving average over the last ``k`` scores (fewer at the start)."""
+    if k == 1:
+        return np.asarray(scores, dtype=float)
+    s = pd.Series(np.asarray(scores, dtype=float))
+    return (
+        s.groupby(units, sort=False)
+        .transform(lambda g: g.rolling(k, min_periods=1).mean())
+        .to_numpy()
+    )
+
+
 def _evaluate(
     df: pd.DataFrame, scores: np.ndarray, threshold: float, cfg: ExperimentConfig
 ) -> SplitResult:
@@ -148,7 +166,9 @@ def run_experiment(
 
     # 3. Threshold from healthy validation cycles, then validation metrics.
     X_val, val_rows = windows_and_rows(val_df)
-    val_scores = detector.score(X_val)
+    val_scores = smooth_scores(
+        detector.score(X_val), val_rows["unit"].to_numpy(), cfg.score_smoothing
+    )
     val_labels = add_anomaly_labels(val_rows, cfg.anomaly_rul, cfg.healthy_rul)["label"]
     threshold = quantile_threshold(val_scores[(val_labels == HEALTHY).to_numpy()], cfg.threshold_q)
     validation = _evaluate(val_rows, val_scores, threshold, cfg)
@@ -160,5 +180,8 @@ def run_experiment(
     # 4. Final hold-out: everything above is frozen.
     if evaluate_test:
         X_test, test_rows = windows_and_rows(load_subset(root, cfg.subset, "test"))
-        result.test = _evaluate(test_rows, detector.score(X_test), threshold, cfg)
+        test_scores = smooth_scores(
+            detector.score(X_test), test_rows["unit"].to_numpy(), cfg.score_smoothing
+        )
+        result.test = _evaluate(test_rows, test_scores, threshold, cfg)
     return result

@@ -26,9 +26,10 @@ from torch import nn
 
 from sentinelts.models.training import (
     TrainingConfig,
-    reconstruction_errors,
+    compute_errors,
+    engine_holdout_mask,
     set_seed,
-    train_reconstruction,
+    train_model,
 )
 
 
@@ -103,34 +104,22 @@ class LSTMAutoencoderDetector:
         self.model: LSTMAutoencoder | None = None
         self.history: dict = {}
 
-    def _split_by_engine(self, groups: np.ndarray) -> np.ndarray:
-        """Boolean mask of samples belonging to early-stopping engines."""
-        units = np.unique(groups)
-        if len(units) < 2:
-            raise ValueError("Need at least 2 engines to hold one out for early stopping")
-        rng = np.random.default_rng(self.seed)
-        n_es = max(1, round(len(units) * self.es_fraction))
-        es_units = rng.choice(units, size=n_es, replace=False)
-        return np.isin(groups, es_units)
-
     def fit(self, X: np.ndarray, groups: np.ndarray) -> LSTMAutoencoderDetector:
         if X.ndim != 3 or X.shape[1] != self.window:
             raise ValueError(f"Expected X of shape (n, {self.window}, n_features), got {X.shape}")
         set_seed(self.seed)
-        es_mask = self._split_by_engine(np.asarray(groups))
+        es_mask = engine_holdout_mask(np.asarray(groups), self.es_fraction, self.seed)
         self.model = LSTMAutoencoder(
             X.shape[2], self.hidden_size, self.latent_size, self.num_layers, self.dropout
         )
-        hist = train_reconstruction(
-            self.model, X[~es_mask], X[es_mask], self.training, seed=self.seed
-        )
+        hist = train_model(self.model, X[~es_mask], X[es_mask], self.training, seed=self.seed)
         self.history = hist.as_dict()
         return self
 
     def score(self, X: np.ndarray) -> np.ndarray:
         if self.model is None:
             raise RuntimeError("Detector must be fitted before scoring")
-        err = reconstruction_errors(self.model, X, device=self.training.device)
+        err = compute_errors(self.model, X, device=self.training.device)
         if self.score_on == "last":
             return err[:, -1, :].mean(axis=1).astype(float)
         return err.mean(axis=(1, 2)).astype(float)
