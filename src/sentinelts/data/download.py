@@ -22,9 +22,7 @@ CMAPSS_URL = (
 # archive this will fail loudly instead of silently changing our data.
 CMAPSS_SHA256 = "c9c5dec12a945a82e8bb4446589d7fb3cc057b5e5d81fa1a12e25ee9912ad3b2"
 
-EXPECTED_FILES = [
-    f"{kind}_FD00{i}.txt" for kind in ("train", "test", "RUL") for i in range(1, 5)
-]
+EXPECTED_FILES = [f"{kind}_FD00{i}.txt" for kind in ("train", "test", "RUL") for i in range(1, 5)]
 
 
 def sha256_bytes(payload: bytes) -> str:
