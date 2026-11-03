@@ -17,14 +17,14 @@ cycle of one engine: `unit, cycle, op_1..op_3` (operating settings) and
 | FD003  | 1 | 2 (HPC, fan) | 100 | 100 |
 | FD004  | 6 | 2 (HPC, fan) | 249 | 248 |
 
-*(Counts measured by `scripts/explore_dataset.py`; the NASA readme swaps the
+*(Counts measured by `sentinelts explore`; the NASA readme swaps the
 FD004 train/test counts.)*
 
 - **Train** series run until failure.
 - **Test** series stop at a random point *before* failure; the RUL at the last
   observed cycle is provided in `RUL_FD00x.txt`.
 
-Observations from `scripts/explore_dataset.py` that drive the design:
+Observations from `sentinelts explore` that drive the design:
 
 - Minimum train lifetime is 128 cycles (FD001/2/4) and 145 (FD003).
 - FD001: sensors `s_1, s_5, s_10, s_16, s_18, s_19` are near-constant

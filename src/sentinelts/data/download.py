@@ -1,7 +1,7 @@
 """Download and extract the NASA C-MAPSS dataset with integrity check.
 
 Usage:
-    python -m sentinelts.data.download --dest data/raw
+    sentinelts download --dest data/raw   (or: python -m sentinelts.data.download)
 """
 
 from __future__ import annotations
