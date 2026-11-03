@@ -92,11 +92,29 @@ test_FD00x.txt  ─────────────────────�
 - `false_alarm_unit_rate`: fraction of engines with >= 1 alarm while healthy.
 - `false_alarm_point_rate`: alarms / healthy cycles.
 
+**Early-warning AUC** (added in component 2, see §6): ROC-AUC separating
+ambiguous cycles (30 < RUL <= 100) from healthy ones.
+
 **Not used: point-adjusted F1.** It marks a whole anomalous segment as detected
 if any single point is flagged; Kim et al. (AAAI 2022) show it lets random
 scores rival published models.
 
-## 5. Definition of done
+## 5. Warm-up
+
+Cycles 1..10 of every engine are neither used for training nor scored
+(`ExperimentConfig.warmup_cycles`). Rolling features are undefined on an
+incomplete window, and the value is fixed across all configurations so every
+experiment is evaluated on identical rows. All engines live >= 128 cycles, so
+only healthy cycles are removed.
+
+## 6. Amendments log
+
+| Date | Change | Reason (measured on validation, never on test) |
+|------|--------|-----------------------------------------------|
+| 2026-11-03 | Added warm-up (§5) | With rolling window 10, 18/19 false alarms of FD001 (seed 42) fell on cycle 1, where the rolling std of a single value is 0. |
+| 2026-11-03 | Added early-warning AUC (§4) | Isolation Forest reaches PR-AUC >= 0.99 on RUL <= 30 vs RUL > 100: that metric is saturated and cannot rank models. Early detection is where they can differ. |
+
+## 7. Definition of done
 
 A model counts as evaluated only when it has (a) validation metrics used for
 all decisions and (b) a single run on the untouched test files of FD001 (and

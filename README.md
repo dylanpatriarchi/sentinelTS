@@ -9,7 +9,7 @@ built with Python and PyTorch.
 ## Roadmap
 
 - [x] Dataset loading, anomaly labelling and leakage-safe evaluation protocol
-- [ ] Preprocessing + Isolation Forest baseline
+- [x] Preprocessing + Isolation Forest baseline (validation only, see [docs/components/02_isolation_forest.md](docs/components/02_isolation_forest.md))
 - [ ] LSTM Autoencoder
 - [ ] Transformer-based detector
 - [ ] Interactive dashboard (anomaly scores and alarms)
@@ -21,6 +21,7 @@ built with Python and PyTorch.
 uv sync                                   # Python 3.11–3.13
 uv run python -m sentinelts.data.download # downloads + checksums C-MAPSS into data/raw
 uv run python scripts/explore_dataset.py  # dataset statistics
+uv run python scripts/run_baseline.py --subset FD001   # Isolation Forest, validation only
 uv run pytest                             # tests
 ```
 
@@ -30,6 +31,9 @@ uv run pytest                             # tests
 src/sentinelts/
   data/         loading (cmapss.py), RUL→anomaly labels (labels.py), engine-level splits (splits.py)
   evaluation/   point-wise & event-wise metrics, threshold selection
+  features/     per-operating-condition normalisation, causal rolling features
+  models/       detectors with a common fit/score interface (Isolation Forest so far)
+  experiment.py end-to-end run following the protocol (test set only on request)
 scripts/        runnable analyses
 tests/          unit tests (+ integration tests that run if data/raw exists)
 docs/           evaluation_protocol.md — read this first

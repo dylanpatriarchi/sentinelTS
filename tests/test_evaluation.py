@@ -29,6 +29,8 @@ def test_point_metrics_hand_computed():
     assert m.recall == pytest.approx(2 / 4)
     assert m.f1 == pytest.approx(2 * (2 / 3) * 0.5 / (2 / 3 + 0.5))
     assert m.anomaly_ratio == pytest.approx(4 / 7)
+    # early warning: ambiguous {0.6} vs healthy {0.1, 0.2, 0.7} -> 2 of 3 pairs ranked right
+    assert m.early_warning_auc == pytest.approx(2 / 3)
 
 
 def test_perfect_detector_scores_one():
