@@ -11,7 +11,7 @@ from sentinelts.models import (
     TrainingConfig,
 )
 from sentinelts.models.training import TrainingConfig as TC
-from sentinelts.models.training import train_reconstruction
+from sentinelts.models.training import engine_holdout_mask, train_model
 
 FAST = TrainingConfig(epochs=40, batch_size=64, lr=5e-3, patience=8)
 
@@ -36,14 +36,14 @@ def test_training_reduces_loss():
     torch.manual_seed(0)
     # 3 independent phases need ~6 latent dims (sin/cos each): give it 8.
     model = LSTMAutoencoder(n_features=3, hidden_size=16, latent_size=8)
-    hist = train_reconstruction(model, _healthy(256), _healthy(64, seed=1), FAST)
+    hist = train_model(model, _healthy(256), _healthy(64, seed=1), FAST)
     assert hist.val_loss[hist.best_epoch] < 0.5 * hist.val_loss[0]
 
 
 def test_early_stopping_stops_and_restores_best():
     model = LSTMAutoencoder(n_features=3, hidden_size=8, latent_size=2)
     cfg = TC(epochs=200, batch_size=64, lr=5e-3, patience=3)
-    hist = train_reconstruction(model, _healthy(128), _healthy(32, seed=1), cfg)
+    hist = train_model(model, _healthy(128), _healthy(32, seed=1), cfg)
     assert len(hist.val_loss) < 200
     assert hist.best_epoch == int(np.argmin(hist.val_loss))
 
@@ -68,9 +68,8 @@ def test_detector_is_deterministic_with_seed():
 
 
 def test_early_stopping_holds_out_whole_engines():
-    det = LSTMAutoencoderDetector(es_fraction=0.2, seed=0)
     groups = np.repeat(np.arange(10), 5)
-    mask = det._split_by_engine(groups)
+    mask = engine_holdout_mask(groups, fraction=0.2, seed=0)
     assert mask.sum() == 10  # 2 engines x 5 samples
     assert not set(groups[mask]) & set(groups[~mask])
 

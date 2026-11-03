@@ -11,7 +11,7 @@ built with Python and PyTorch.
 - [x] Dataset loading, anomaly labelling and leakage-safe evaluation protocol
 - [x] Preprocessing + Isolation Forest baseline (validation only, see [docs/components/02_isolation_forest.md](docs/components/02_isolation_forest.md))
 - [x] LSTM Autoencoder (validation only, see [docs/components/03_lstm_autoencoder.md](docs/components/03_lstm_autoencoder.md))
-- [ ] Transformer-based detector
+- [x] Transformer-based detector + causal score smoothing (validation only, see [docs/components/04_transformer.md](docs/components/04_transformer.md))
 - [ ] Interactive dashboard (anomaly scores and alarms)
 - [ ] Final evaluation on unseen test engines (FD001–FD004)
 
@@ -22,7 +22,8 @@ uv sync                                   # Python 3.11–3.13
 uv run python -m sentinelts.data.download # downloads + checksums C-MAPSS into data/raw
 uv run python scripts/explore_dataset.py  # dataset statistics
 uv run python scripts/run_experiment.py --model iforest --subset FD001                    # validation only
-uv run python scripts/run_experiment.py --model lstm_ae --subset FD001 --rolling-window 0
+uv run python scripts/run_experiment.py --model lstm_ae --subset FD001 --rolling-window 0 --window 50
+uv run python scripts/run_experiment.py --model transformer --subset FD001 --rolling-window 0 --window 50 --score-smoothing 10
 uv run pytest                             # tests
 ```
 
@@ -33,7 +34,8 @@ src/sentinelts/
   data/         loading (cmapss.py), RUL→anomaly labels (labels.py), engine-level splits (splits.py)
   evaluation/   point-wise & event-wise metrics, threshold selection
   features/     per-operating-condition normalisation, causal rolling features, causal windows
-  models/       detectors with a common fit/score interface: Isolation Forest, LSTM Autoencoder
+  models/       detectors with a common fit/score interface: Isolation Forest, LSTM Autoencoder,
+                Transformer forecaster
                 + reusable PyTorch training loop with engine-level early stopping
   experiment.py end-to-end run following the protocol (test set only on request)
 scripts/        runnable analyses
