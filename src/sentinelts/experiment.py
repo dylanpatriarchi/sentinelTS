@@ -23,7 +23,7 @@ from sentinelts.data import add_anomaly_labels, load_subset, split_units
 from sentinelts.data.labels import HEALTHY
 from sentinelts.data.splits import healthy_prefix, select_units
 from sentinelts.evaluation import event_metrics, point_metrics, quantile_threshold
-from sentinelts.features import ConditionNormalizer, add_rolling_features
+from sentinelts.features import ConditionNormalizer, add_rolling_features, make_windows
 from sentinelts.models import AnomalyDetector
 
 N_CONDITIONS = {"FD001": 1, "FD002": 6, "FD003": 1, "FD004": 6}
@@ -70,6 +70,7 @@ class ExperimentResult:
 
     def summary(self) -> dict:
         out = {"config": self.config, "threshold": self.threshold, "n_features": len(self.features)}
+        out.update(self.extra)
         out["validation"] = {"point": self.validation.point, "event": self.validation.event}
         if self.test is not None:
             out["test"] = {"point": self.test.point, "event": self.test.event}
@@ -86,19 +87,18 @@ class FeaturePipeline:
 
     def fit(self, train_rows: pd.DataFrame) -> FeaturePipeline:
         self.normalizer.fit(train_rows)
+        sensors = list(self.normalizer.sensors_ or [])
+        w = self.rolling_window
+        rolled = [f"{s}_mean{w}" for s in sensors] + [f"{s}_std{w}" for s in sensors]
+        self.feature_names = sensors + (rolled if w > 0 else [])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         out = self.normalizer.transform(df)
-        sensors = list(self.normalizer.sensors_ or [])
         if self.rolling_window > 0:
-            out = add_rolling_features(out, sensors, self.rolling_window)
-            rolled = [f"{s}_mean{self.rolling_window}" for s in sensors] + [
-                f"{s}_std{self.rolling_window}" for s in sensors
-            ]
-            self.feature_names = sensors + rolled
-        else:
-            self.feature_names = sensors
+            out = add_rolling_features(
+                out, list(self.normalizer.sensors_ or []), self.rolling_window
+            )
         return out
 
 
@@ -126,33 +126,39 @@ def run_experiment(
     fit_df = select_units(train, split.fit_units)
     val_df = select_units(train, split.val_units)
 
-    def armed(d: pd.DataFrame) -> pd.DataFrame:
-        """Rows after the warm-up period, i.e. where the monitor is allowed to alarm."""
-        return d[d["cycle"] > cfg.warmup_cycles].reset_index(drop=True)
+    detector = detector_factory()
+
+    def windows_and_rows(df: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
+        """Causal windows for the armed rows (history may reach into the warm-up)."""
+        feat = features.transform(df)
+        X = make_windows(feat, cols, detector.window)
+        armed = (feat["cycle"] > cfg.warmup_cycles).to_numpy()
+        return X[armed], feat[armed].reset_index(drop=True)
 
     # 1. Fit preprocessing on the healthy prefix of fit engines only.
     features = FeaturePipeline(N_CONDITIONS[cfg.subset], cfg.rolling_window, cfg.seed)
     features.fit(healthy_prefix(fit_df, cfg.healthy_cycles))
-
-    # 2. Fit detector on the same rows. Rolling features are causal, so features
-    #    of prefix rows only depend on prefix cycles.
-    fit_feat = armed(features.transform(fit_df))
     cols = features.feature_names or []
-    train_rows = fit_feat[fit_feat["cycle"] <= cfg.healthy_cycles]
-    detector = detector_factory().fit(train_rows[cols].to_numpy())
+
+    # 2. Fit detector on windows ending in the healthy prefix. Windows and rolling
+    #    features are causal, so they only contain prefix cycles.
+    X_fit, fit_rows = windows_and_rows(fit_df)
+    in_prefix = (fit_rows["cycle"] <= cfg.healthy_cycles).to_numpy()
+    detector.fit(X_fit[in_prefix], groups=fit_rows["unit"].to_numpy()[in_prefix])
 
     # 3. Threshold from healthy validation cycles, then validation metrics.
-    val_feat = armed(features.transform(val_df))
-    val_scores = detector.score(val_feat[cols].to_numpy())
-    val_labels = add_anomaly_labels(val_feat, cfg.anomaly_rul, cfg.healthy_rul)["label"]
+    X_val, val_rows = windows_and_rows(val_df)
+    val_scores = detector.score(X_val)
+    val_labels = add_anomaly_labels(val_rows, cfg.anomaly_rul, cfg.healthy_rul)["label"]
     threshold = quantile_threshold(val_scores[(val_labels == HEALTHY).to_numpy()], cfg.threshold_q)
-    validation = _evaluate(val_feat, val_scores, threshold, cfg)
+    validation = _evaluate(val_rows, val_scores, threshold, cfg)
 
     result = ExperimentResult(asdict(cfg), cols, threshold, validation)
+    if hasattr(detector, "history"):
+        result.extra["training_history"] = detector.history
 
     # 4. Final hold-out: everything above is frozen.
     if evaluate_test:
-        test_feat = armed(features.transform(load_subset(root, cfg.subset, "test")))
-        test_scores = detector.score(test_feat[cols].to_numpy())
-        result.test = _evaluate(test_feat, test_scores, threshold, cfg)
+        X_test, test_rows = windows_and_rows(load_subset(root, cfg.subset, "test"))
+        result.test = _evaluate(test_rows, detector.score(X_test), threshold, cfg)
     return result

@@ -83,3 +83,17 @@ def test_warmup_cycles_are_never_scored(synthetic_root):
 def test_invalid_window_rejected():
     with pytest.raises(ValueError, match="warmup"):
         ExperimentConfig(rolling_window=20, warmup_cycles=10)
+
+
+def test_pipeline_runs_with_windowed_lstm_autoencoder(synthetic_root):
+    from sentinelts.models import LSTMAutoencoderDetector, TrainingConfig
+
+    def factory():
+        return LSTMAutoencoderDetector(
+            window=10, hidden_size=16, latent_size=4, training=TrainingConfig(epochs=5)
+        )
+
+    res = run_experiment(synthetic_root, factory, ExperimentConfig(rolling_window=0))
+    assert res.validation.scored["cycle"].min() == 11  # same evaluated rows as point models
+    assert "training_history" in res.extra
+    assert np.isfinite(res.validation.scored["score"]).all()

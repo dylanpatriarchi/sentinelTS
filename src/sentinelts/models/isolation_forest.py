@@ -16,13 +16,17 @@ from sklearn.ensemble import IsolationForest
 
 
 class IsolationForestDetector:
+    """Point-wise by default (window=1). With window>1 the window is flattened."""
+
     def __init__(
         self,
         n_estimators: int = 200,
         max_samples: int | str = "auto",
         max_features: float = 1.0,
+        window: int = 1,
         seed: int = 0,
     ) -> None:
+        self.window = window
         self.model = IsolationForest(
             n_estimators=n_estimators,
             max_samples=max_samples,
@@ -35,8 +39,13 @@ class IsolationForestDetector:
         )
         self._fitted = False
 
-    def fit(self, X: np.ndarray) -> IsolationForestDetector:
-        self.model.fit(np.asarray(X, dtype=float))
+    @staticmethod
+    def _flatten(X: np.ndarray) -> np.ndarray:
+        X = np.asarray(X, dtype=float)
+        return X.reshape(len(X), -1)
+
+    def fit(self, X: np.ndarray, groups: np.ndarray | None = None) -> IsolationForestDetector:
+        self.model.fit(self._flatten(X))
         self._fitted = True
         return self
 
@@ -44,4 +53,4 @@ class IsolationForestDetector:
         if not self._fitted:
             raise RuntimeError("Detector must be fitted before scoring")
         # sklearn's score_samples is HIGHER for normal points; flip the sign.
-        return -self.model.score_samples(np.asarray(X, dtype=float))
+        return -self.model.score_samples(self._flatten(X))
